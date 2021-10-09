@@ -1,8 +1,11 @@
-[submodule "godot-headers"]
-	path = godot-headers
-	url = git@github.com:godotengine/godot-headers.git
-	shallow = true
 [submodule "FFmpeg"]
 	path = FFmpeg
 	url = git@github.com:FFmpeg/FFmpeg.git
+	shallow = true
+[submodule "confply"]
+	path = confply
+	url = git@github.com:graehu/confply.git
+[submodule "godot-cpp"]
+	path = godot-cpp
+	url = git@github.com:godotengine/godot-cpp.git
 	shallow = true
