@@ -23,28 +23,29 @@ namespace godot
 
       void _init();
       void _process(float delta);
-   protected:
+      void _record_duration(float duration);
       void _toggle_record();
+
+   protected:
       void _save_frames(void* user_data);
-      void _timer_complete();
+      void _save_timer_complete();
+      void _toggle_timer_complete();
       float frames_per_second;
       String output_folder;
       bool flip_y = true;
       bool use_thread = false;
 
    private:
-      float _frametick;
-      // vector<Ref<Image>> _images;
       Array _images;
       Viewport* _viewport;
       Label* _label;
-      // var _label = Label.new();
+      Thread* _thread;
+      Timer* _save_timer;
+      Timer* _toggle_timer;
+      float _frametick;
       bool _saving = false;
       bool _running = false;
-      Thread* _thread;
-      Timer* _timer;
    };
-
 }
 
 #endif//RECORDER_H

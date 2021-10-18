@@ -1,5 +1,6 @@
 #include "recorder.h"
 #include "Defs.hpp"
+#include "GodotGlobal.hpp"
 #include "Object.hpp"
 #include "Thread.hpp"
 #include <Viewport.hpp>
@@ -21,34 +22,45 @@ namespace godot
 {    
    void Recorder::_register_methods()
    {
+      //methods
       register_method("_process", &Recorder::_process);
+      register_method("_record_duration", &Recorder::_record_duration);
+      register_method("save_timer_complete", &Recorder::_save_timer_complete);
+      register_method("toggle_timer_complete", &Recorder::_toggle_timer_complete);
+      //props
       register_property<Recorder, float>("frames_per_second", &Recorder::frames_per_second, 15);
       register_property<Recorder, String>("output_folder", &Recorder::output_folder, String("../out"));
-      register_method("timer_complete", &Recorder::_timer_complete);
    }
    Recorder::Recorder()
       : _viewport(nullptr),
-	_thread(nullptr)
+	_thread(nullptr),
+	_save_timer(nullptr),
+	_toggle_timer(nullptr)
    {
    }
    Recorder::~Recorder()
    {
+      _viewport = nullptr;
       // add your cleanup here
-      if(_viewport != nullptr)
-      {
-#pragma message("Fix this")
-      }
       if(_thread != nullptr)
       {
-#pragma message("Fix this")
+	 _thread->free();
+	 _thread = nullptr;
       }
       if(_label != nullptr)
       {
-#pragma message("Fix this")	 
+	 _label->free();
+	 _label = nullptr;
       }
-      if(_timer != nullptr)
+      if(_save_timer != nullptr)
       {
-#pragma message("Fix this")	 
+	 _save_timer->free();
+	 _save_timer = nullptr;
+      }
+      if(_toggle_timer != nullptr)
+      {
+	 _toggle_timer->free();
+	 _toggle_timer = nullptr;
       }
    }
    void Recorder::_init()
@@ -77,8 +89,10 @@ namespace godot
       _label->set_anchor(GlobalConstants::MARGIN_TOP, 1);
       _label->set_margin(GlobalConstants::MARGIN_TOP, -40);
       _label->hide();
-      _timer = Timer::_new();
-      _timer->connect("timeout", this, "timer_complete");
+      _save_timer = Timer::_new();
+      _toggle_timer = Timer::_new();
+      _save_timer->connect("timeout", this, "save_timer_complete");
+      _toggle_timer->connect("timeout", this, "toggle_timer_complete");
    }
    void Recorder::_process(float delta)
    {
@@ -107,23 +121,23 @@ namespace godot
       if (!_running)
       {
    	 _label->show();
-      }
-      if (use_thread)
-      {
-   	 if(not _thread->is_active())
-   	 {
-   	    auto err = _thread->start(this, "save_frames");
-   	 }
-      }
-      else
-      {
-   	 _save_frames(nullptr);
+	 if (use_thread)
+	 {
+	    if(!_thread->is_active())
+	    {
+	       auto err = _thread->start(this, "save_frames");
+	    }
+	 }
+	 else
+	 {
+	    _save_frames(nullptr);
+	 }
       }
    }
    void Recorder::_save_frames(void* user_data)
    {
       _saving = true;
-	   //# userdata wont be used, is just for the thread calling
+      //# userdata wont be used, is just for the thread calling
       String scene_name = get_tree()->get_current_scene()->get_name();
       Dictionary date_time = OS::get_singleton()->get_datetime();
       Object* hour = Object::cast_to<Object>(date_time["hour"]);
@@ -137,7 +151,6 @@ namespace godot
 	 dir->make_dir(path);
 	 if (dir->open(path) != Error::OK)
 	 {
-	    // print("An error occurred when trying to create the output folder.");
 	    ERR_PRINT("An error occurred when trying to create the output folder.");
 	 }
 	
@@ -168,13 +181,23 @@ namespace godot
 	 array.append(fps);
 	 OS::get_singleton()->execute("python", array, false, output);
 	 _label->set_text("Done!");
-	 _timer->start(1);
+	 _save_timer->start(1);
       }
    }
-   void Recorder::_timer_complete()
+   void Recorder::_record_duration(float duration = 5)
+   {
+      if (_running) { return; }
+      _toggle_record();
+      _toggle_timer->start(duration);
+   }
+   void Recorder::_save_timer_complete()
    {
       _label->set_text("");
       _label->hide();
       _saving = false;
+   }
+   void Recorder::_toggle_timer_complete()
+   {
+      _toggle_record();
    }
 } // namespace godot
