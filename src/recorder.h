@@ -22,9 +22,10 @@ namespace godot
       ~Recorder();
 
       void _init();
+      void _ready();
       void _process(float delta);
-      void _record_duration(float duration);
-      void _toggle_record();
+      void record_duration(float duration);
+      void toggle_record();
 
    protected:
       void _save_frames(void* user_data);

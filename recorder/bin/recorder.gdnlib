@@ -7,9 +7,9 @@ reloadable=false
 
 [entry]
 
-X11.64="res://bin/librecorder.so"
-Windows.64="res:/bin/librecorder.dll"
-OSX.64="res://bin/librecorder.dylib"
+X11.64="res://recorder/bin/librecorder.so"
+Windows.64="res://recorder/bin/librecorder.dll"
+OSX.64="res://recorder/bin/librecorder.dylib"
 
 [dependencies]
 

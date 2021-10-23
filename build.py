@@ -24,9 +24,11 @@ config.include_paths = ["godot-cpp/godot-headers",
                         "godot-cpp/include/gen",
 ]
 ff_dir = "FFmpeg/"
-ff_libs = ["avformat", "avcodec", "swresample", "swscale", "avutil", "x264"]
-config.library_paths.extend([ff_dir+"lib"+lib for lib in ff_libs])
-config.link_libraries.extend(ff_libs)
+# ff_libs = ["avformat", "avcodec", "swresample", "swscale", "avutil", "x264"]
+# config.library_paths.extend([ff_dir+"lib"+lib for lib in ff_libs])
+config.library_paths.append("godot-cpp/bin/")
+# config.link_libraries.extend(ff_libs)
+config.link_libraries.append("godot-cpp.linux.debug.64")
 config.compile_commands = True
 config.position_independent = True
 config.output_file = "recorder/bin/librecorder.so"
@@ -35,7 +37,7 @@ config.output_type = options.output_type.dll
 
 def post_load():
     import os
-    if not os.path.exists("godot-cpp/include/gen/Viewport.hpp"):
+    if not os.path.exists("godot-cpp/bin/libgodot-cpp.linux.debug.64.a"):
         os.system("cd godot-cpp; scons platform=linux generate_bindings=yes -j4")
     if not os.path.exists(ff_dir+"config.h"):
         os.system("cd "+ff_dir+"; ./configure")
@@ -43,5 +45,9 @@ def post_load():
     log.normal("ffmpeg built")
     pass
 
+def post_run():
+    import shutil
+    shutil.copytree("recorder", "../recorder-demo/recorder", dirs_exist_ok=True)
 
 config.confply.post_load = post_load
+config.confply.post_run = post_run

@@ -3,6 +3,9 @@
 #include "GodotGlobal.hpp"
 #include "Object.hpp"
 #include "Thread.hpp"
+#include "Variant.hpp"
+#include "gdnative/gdnative.h"
+#include "gdnative/string.h"
 #include <Viewport.hpp>
 #include <ViewportTexture.hpp>
 #include <Image.hpp>
@@ -24,7 +27,9 @@ namespace godot
    {
       //methods
       register_method("_process", &Recorder::_process);
-      register_method("_record_duration", &Recorder::_record_duration);
+      register_method("_ready", &Recorder::_ready);
+      register_method("record_duration", &Recorder::record_duration);
+      register_method("toggle_record", &Recorder::toggle_record);
       register_method("save_timer_complete", &Recorder::_save_timer_complete);
       register_method("toggle_timer_complete", &Recorder::_toggle_timer_complete);
       //props
@@ -32,7 +37,9 @@ namespace godot
       register_property<Recorder, String>("output_folder", &Recorder::output_folder, String("../out"));
    }
    Recorder::Recorder()
-      : _viewport(nullptr),
+      : frames_per_second(15),
+	output_folder("../out"),
+	_viewport(nullptr),
 	_thread(nullptr),
 	_save_timer(nullptr),
 	_toggle_timer(nullptr)
@@ -63,9 +70,14 @@ namespace godot
 	 _toggle_timer = nullptr;
       }
    }
-   void Recorder::_init()
+
+#define STRINGIZE(x) STRINGIZE2(x)
+#define STRINGIZE2(x) #x
+#define LINE_STRING STRINGIZE(__LINE__)
+   void Recorder::_init(){}
+   void Recorder::_ready()
    {
-      // initialize any variables here
+      // Initialize any variables here
       _viewport = get_viewport();
       _frametick = 1.0 / frames_per_second;
       _thread = Thread::_new();
@@ -76,41 +88,48 @@ namespace godot
       auto engine = Engine::get_singleton();
       if(!engine->is_editor_hint())
       {
-	 set_process(true);
-	 set_process_input(true);
+     	 set_process(true);
+     	 set_process_input(true);
       }
       //# Some recorder info to show onscreen
       _viewport->call_deferred("add_child", _label);
-     //#		print(get_tree().root)
-     //#		get_tree().root.add_child(_label)
-     //#		_label.text = "Waiting for capture...\nNumber of frames recorded: " + str(_images.size())
+      //#		print(get_tree().root)
+      //#		get_tree().root.add_child(_label)
+      //#		_label.text = "Waiting for capture...\nNumber of frames recorded: " + str(_images.size())
+
+
       _label->set_anchor(GlobalConstants::MARGIN_BOTTOM, 1);
       _label->set_margin(GlobalConstants::MARGIN_BOTTOM, -10);
       _label->set_anchor(GlobalConstants::MARGIN_TOP, 1);
       _label->set_margin(GlobalConstants::MARGIN_TOP, -40);
       _label->hide();
+
+
       _save_timer = Timer::_new();
       _toggle_timer = Timer::_new();
       _save_timer->connect("timeout", this, "save_timer_complete");
       _toggle_timer->connect("timeout", this, "toggle_timer_complete");
+      _viewport->call_deferred("add_child", _save_timer);
+      _viewport->call_deferred("add_child", _toggle_timer);
+      
    }
    void Recorder::_process(float delta)
    {
       if (_running)
       {
-	 _frametick += delta;
-	 if (_frametick > 1.0/frames_per_second)
-	 {
-	    _frametick -= 1.0/frames_per_second;
-	    Ref<Image> image = _viewport->get_texture()->get_data();
-	    Vector2 pos = get_global_transform_with_canvas().get_origin();
-	    Rect2 rect = Rect2(Vector2(pos.x,_viewport->get_size().y - (pos.y + get_rect().size.y)), get_rect().size);
-	    image->blit_rect(image, rect, Vector2(0,0));
-	    _images.append(image);
-	 }
+      	 _frametick += delta;
+      	 if (_frametick > 1.0/frames_per_second)
+      	 {
+      	    _frametick -= 1.0/frames_per_second;
+      	    Ref<Image> image = _viewport->get_texture()->get_data();
+      	    Vector2 pos = get_global_transform_with_canvas().get_origin();
+      	    Rect2 rect = Rect2(Vector2(pos.x,_viewport->get_size().y - (pos.y + get_rect().size.y)), get_rect().size);
+      	    image->blit_rect(image, rect, Vector2(0,0));
+      	    _images.append(image);
+      	 }
       }
    }
-   void Recorder::_toggle_record()
+   void Recorder::toggle_record()
    {
       if (_thread->is_active() || _saving)
       {
@@ -136,24 +155,26 @@ namespace godot
    }
    void Recorder::_save_frames(void* user_data)
    {
+      ERR_PRINT("trying to save");
       _saving = true;
       //# userdata wont be used, is just for the thread calling
       String scene_name = get_tree()->get_current_scene()->get_name();
       Dictionary date_time = OS::get_singleton()->get_datetime();
-      Object* hour = Object::cast_to<Object>(date_time["hour"]);
-      Object* minute = Object::cast_to<Object>(date_time["minute"]);
-      Object* second = Object::cast_to<Object>(date_time["second"]);
-      if(hour && minute && second)
+      const String hour = date_time["hour"];
+      const String minute = date_time["minute"];
+      const String second = date_time["second"];
+      // if(hour && minute && second)
       {
-	 String time_str = hour->to_string()+"-"+minute->to_string()+"-"+second->to_string();
+	 String time_str = hour+"-"+minute+"-"+second;
 	 Directory* dir = Directory::_new();
 	 String path = "res://" + output_folder+"/"+scene_name+"_"+time_str+"/";
+	 Godot::print(output_folder);
+	 Godot::print(path);
 	 dir->make_dir(path);
 	 if (dir->open(path) != Error::OK)
 	 {
 	    ERR_PRINT("An error occurred when trying to create the output folder.");
 	 }
-	
 	 for (int i = 0; i < _images.size(); i++)
 	 {
 	    Ref<Image> image = _images[i];
@@ -163,7 +184,7 @@ namespace godot
 	    {
 	       image->flip_y();
 	    }
-	    image->save_png(path + String(i) + ".png");
+	    image->save_png(path + String::num_int64(i) + ".png");
 	 }
 	 _images.clear();
 	
@@ -172,7 +193,7 @@ namespace godot
 	    _thread->wait_to_finish();
 	 }
 	 Array output;
-	 String script  = "addons/Recorder/folder_to_gif.py";
+	 String script  = "recorder/folder_to_gif.py";
 	 path = output_folder+"/"+scene_name+"_"+time_str+"/";
 	 float fps = frames_per_second;
 	 PoolStringArray array;
@@ -184,20 +205,21 @@ namespace godot
 	 _save_timer->start(1);
       }
    }
-   void Recorder::_record_duration(float duration = 5)
+   void Recorder::record_duration(float duration = 5)
    {
       if (_running) { return; }
-      _toggle_record();
+      toggle_record();
       _toggle_timer->start(duration);
    }
    void Recorder::_save_timer_complete()
    {
+      Godot::print("lets do the timewarp again");
       _label->set_text("");
       _label->hide();
       _saving = false;
    }
    void Recorder::_toggle_timer_complete()
    {
-      _toggle_record();
+      toggle_record();
    }
 } // namespace godot
