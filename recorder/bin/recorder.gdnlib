@@ -13,6 +13,6 @@ OSX.64="res://recorder/bin/librecorder.dylib"
 
 [dependencies]
 
-X11.64=[]
+X11.64=["res://recorder/bin/libx264.so.160", "res://recorder/bin/libavcodec.so.58", "res://recorder/bin/libavdevice.so.58", "res://recorder/bin/libavfilter.so.7", "res://recorder/bin/libavformat.so.58", "res://recorder/bin/libswresample.so.3", "res://recorder/bin/libswscale.so.5"]
 Windows.64=[]
 OSX.64=[]

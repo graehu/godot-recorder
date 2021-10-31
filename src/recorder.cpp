@@ -2,6 +2,7 @@
 #include "Defs.hpp"
 #include "GodotGlobal.hpp"
 #include "Object.hpp"
+#include "ReferenceRect.hpp"
 #include "Thread.hpp"
 #include "Variant.hpp"
 #include "gdnative/gdnative.h"
@@ -20,6 +21,8 @@
 #include <Directory.hpp>
 #include <Timer.hpp>
 #include <PoolArrays.hpp>
+#include <bits/stdint-uintn.h>
+#include "mpeg_writer.h"
 
 namespace godot
 {    
@@ -36,6 +39,7 @@ namespace godot
       register_property<Recorder, float>("frames_per_second", &Recorder::frames_per_second, 15);
       register_property<Recorder, String>("output_folder", &Recorder::output_folder, String("../out"));
    }
+   //#todo: lots of uninitialised vars here.
    Recorder::Recorder()
       : frames_per_second(15),
 	output_folder("../out"),
@@ -43,6 +47,7 @@ namespace godot
 	_thread(nullptr),
 	_save_timer(nullptr),
 	_toggle_timer(nullptr)
+	// _writer(nullptr)
    {
    }
    Recorder::~Recorder()
@@ -69,11 +74,17 @@ namespace godot
 	 _toggle_timer->free();
 	 _toggle_timer = nullptr;
       }
+      // if(_writer != nullptr)
+      // {
+      // 	 delete _writer;
+      // 	 _writer = nullptr;
+      // }
    }
 
 #define STRINGIZE(x) STRINGIZE2(x)
 #define STRINGIZE2(x) #x
 #define LINE_STRING STRINGIZE(__LINE__)
+#define GD_LINE godot::Godot::print(LINE_STRING)
    void Recorder::_init(){}
    void Recorder::_ready()
    {
@@ -108,7 +119,9 @@ namespace godot
       _save_timer = Timer::_new();
       _toggle_timer = Timer::_new();
       _save_timer->connect("timeout", this, "save_timer_complete");
+      _save_timer->set_one_shot(true);
       _toggle_timer->connect("timeout", this, "toggle_timer_complete");
+      _toggle_timer->set_one_shot(true);
       _viewport->call_deferred("add_child", _save_timer);
       _viewport->call_deferred("add_child", _toggle_timer);
       
@@ -131,6 +144,7 @@ namespace godot
    }
    void Recorder::toggle_record()
    {
+      Godot::print("hyng....");
       if (_thread->is_active() || _saving)
       {
    	 return;
@@ -144,18 +158,18 @@ namespace godot
 	 {
 	    if(!_thread->is_active())
 	    {
+	       Godot::print("ruh roh....");
 	       auto err = _thread->start(this, "save_frames");
 	    }
 	 }
 	 else
-	 {
+	 {	    
 	    _save_frames(nullptr);
 	 }
       }
    }
    void Recorder::_save_frames(void* user_data)
    {
-      ERR_PRINT("trying to save");
       _saving = true;
       //# userdata wont be used, is just for the thread calling
       String scene_name = get_tree()->get_current_scene()->get_name();
@@ -175,16 +189,29 @@ namespace godot
 	 {
 	    ERR_PRINT("An error occurred when trying to create the output folder.");
 	 }
-	 for (int i = 0; i < _images.size(); i++)
+	 auto rect = ReferenceRect::get_rect();
+	 String writer_path = (output_folder+"/"+scene_name+"_"+time_str+".mp4");
 	 {
-	    Ref<Image> image = _images[i];
-	    _label->set_text("Saving frames...("+String(i) + "/"+String(_images.size())+")");
-	    image->crop(get_rect().size.x, get_rect().size.y);
-	    if (flip_y)
+	    const char* c_string = writer_path.alloc_c_string();
+	    mpeg_writer*writer = new mpeg_writer(c_string, rect.get_size().x, rect.get_size().y, frames_per_second);
+	    for (int i = 0; i < _images.size(); i++)
 	    {
-	       image->flip_y();
+	       Ref<Image> image = _images[i];
+	       _label->set_text("Saving frames...("+String::num(i) + "/"+String(_images.size())+")");
+	       image->crop(get_rect().size.x, get_rect().size.y);
+	       if (flip_y)
+	       {
+		  image->flip_y();
+	       }
+	       auto pool = image->get_data();
+	       auto* ptr = pool.read().ptr();
+	       writer->add_frame((uint8_t*)ptr);
 	    }
-	    image->save_png(path + String::num_int64(i) + ".png");
+	    Godot::print("wrote "+String::num(_images.size())+"frames");
+	    delete writer;
+	    writer = nullptr;
+	    delete c_string;
+	    Godot::print("so far so good....");
 	 }
 	 _images.clear();
 	
@@ -192,15 +219,15 @@ namespace godot
 	 {
 	    _thread->wait_to_finish();
 	 }
-	 Array output;
-	 String script  = "recorder/folder_to_gif.py";
-	 path = output_folder+"/"+scene_name+"_"+time_str+"/";
-	 float fps = frames_per_second;
-	 PoolStringArray array;
-	 array.append(script);
-	 array.append(path);
-	 array.append(fps);
-	 OS::get_singleton()->execute("python", array, false, output);
+	 // Array output;
+	 // String script  = "recorder/folder_to_gif.py";
+	 // path = output_folder+"/"+scene_name+"_"+time_str+"/";
+	 // float fps = frames_per_second;
+	 // PoolStringArray array;
+	 // array.append(script);
+	 // array.append(path);
+	 // array.append(fps);
+	 // OS::get_singleton()->execute("python", array, false, output);
 	 _label->set_text("Done!");
 	 _save_timer->start(1);
       }
@@ -213,7 +240,6 @@ namespace godot
    }
    void Recorder::_save_timer_complete()
    {
-      Godot::print("lets do the timewarp again");
       _label->set_text("");
       _label->hide();
       _saving = false;

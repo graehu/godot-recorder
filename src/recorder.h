@@ -5,6 +5,7 @@
 #include <Godot.hpp>
 #include <ReferenceRect.hpp>
 
+class mpeg_writer;
 namespace godot
 {
    class Thread;
