@@ -29,19 +29,19 @@ namespace godot
       void toggle_record();
 
    protected:
-      void _save_frames(void* user_data);
+      void _save_frames();
       void _save_timer_complete();
       void _toggle_timer_complete();
       float frames_per_second;
       String output_folder;
-      bool flip_y = true;
-      bool use_thread = false;
+      bool flip_y;
+      bool use_thread;
 
    private:
       Array _images;
       Viewport* _viewport;
       Label* _label;
-      Thread* _thread;
+      Ref<Thread> _thread;
       Timer* _save_timer;
       Timer* _toggle_timer;
       float _frametick;

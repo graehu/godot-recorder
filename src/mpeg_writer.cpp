@@ -65,6 +65,7 @@ mpeg_writer::mpeg_writer(const char* _filename, unsigned int _width, unsigned in
    codec_context->pix_fmt = AV_PIX_FMT_YUV420P;
    //if (codec_id == AV_CODEC_ID_H264)
    av_opt_set(codec_context->priv_data, "preset", "slow", 0);
+   
    // open codec #todo: error handling, ret < 0 get error strings.
    int ret = avcodec_open2(codec_context, codec, nullptr);
    if (ret < 0)
@@ -161,14 +162,15 @@ mpeg_writer::~mpeg_writer()
    av_freep(&scaled_frame->data[0]);
    av_frame_free(&scaled_frame);
    delete packet;
-}
-int mpeg_writer::add_frame(uint8_t *rgb)
+ }
+int mpeg_writer::add_frame(uint8_t *rgb, int pix_format)
 {
    if(rgb != nullptr)
    {
       const int in_linesize[1] = { 3 * frame->width };
       //yuv conversion
       sws_context = sws_getCachedContext(sws_context,
+					 // #todo: don't assume the format?
 					 frame->width, frame->height, AV_PIX_FMT_RGB24,
 					 frame->width, frame->height, AV_PIX_FMT_YUV420P,
 					 SWS_BICUBIC, nullptr, nullptr, nullptr);
@@ -206,22 +208,12 @@ int mpeg_writer::add_frame(uint8_t *rgb)
 	 av_strerror(ret, error_buf, AV_ERROR_MAX_STRING_SIZE);
 	 fprintf(stderr, "Error encoding frame %s\n", error_buf);
 	 godot::Godot::print("Error encoding frame %s\n", error_buf);
-	 // exit(1);
+	 exit(1);
       }
       ret = avcodec_receive_packet(codec_context, packet);
       if (ret >= 0)
       {
-	 // #todo: cache this data so it can be sent later?
-	 // mpeg_stream.cpp?
-	 // static auto last_size = 0;
-	 // if (packet->size > last_size)
-	 // {
-	 //    last_size = packet->size;
-	 //    printf("max size %d\n", last_size);
-	 // }
-	 // pleb_size = packet->size;
-	 // memcpy(pleb, packet->data, pleb_size);
-	 // fwrite(pleb, 1, packet->size, out_file);
+	 fwrite(packet->data, 1, packet->size, out_file);
 	 av_packet_unref(packet);
       }
    }

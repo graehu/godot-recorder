@@ -16,9 +16,7 @@ public:
    ~mpeg_writer();
    // #todo: make a proper type for image data
    //adds a frame to the mpeg
-   int add_frame(uint8_t *rgb);
-   unsigned char pleb[16384];
-   int pleb_size;
+   int add_frame(uint8_t *rgb, int pix_format = 2);
 private:
    AVFrame* frame;
    AVFrame* scaled_frame;

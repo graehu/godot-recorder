@@ -25,12 +25,17 @@
 #include "mpeg_writer.h"
 
 namespace godot
-{    
+{
+   #define STRINGIZE(x) STRINGIZE2(x)
+#define STRINGIZE2(x) #x
+#define LINE_STRING STRINGIZE(__LINE__)
+#define GD_LINE godot::Godot::print(__FILE__ ": " LINE_STRING)
    void Recorder::_register_methods()
    {
       //methods
       register_method("_process", &Recorder::_process);
       register_method("_ready", &Recorder::_ready);
+      register_method("_save_frames", &Recorder::_save_frames);
       register_method("record_duration", &Recorder::record_duration);
       register_method("toggle_record", &Recorder::toggle_record);
       register_method("save_timer_complete", &Recorder::_save_timer_complete);
@@ -46,7 +51,9 @@ namespace godot
 	_viewport(nullptr),
 	_thread(nullptr),
 	_save_timer(nullptr),
-	_toggle_timer(nullptr)
+	_toggle_timer(nullptr),
+	use_thread(true),
+	flip_y(true)
 	// _writer(nullptr)
    {
    }
@@ -56,42 +63,45 @@ namespace godot
       // add your cleanup here
       if(_thread != nullptr)
       {
-	 _thread->free();
-	 _thread = nullptr;
+	 if(_thread->is_active())
+	 {
+	    _thread->wait_to_finish();
+	 }
+	 _thread->unreference();
       }
-      if(_label != nullptr)
-      {
-	 _label->free();
-	 _label = nullptr;
-      }
-      if(_save_timer != nullptr)
-      {
-	 _save_timer->free();
-	 _save_timer = nullptr;
-      }
-      if(_toggle_timer != nullptr)
-      {
-	 _toggle_timer->free();
-	 _toggle_timer = nullptr;
-      }
+      // the rest of these are associated with the scene, might need to add refs if I want to clean them up here.
+      // #todo: seems like these might be leaking, but they don't come with ref class accessors. Not sure what the clean-up pattern is.
+      // if(_label != nullptr)
+      // {
+      // 	 _label->free();
+      // 	 _label = nullptr;
+      // }
+      // GD_LINE;
+      // if(_save_timer != nullptr)
+      // {
+      // 	 _save_timer->free();
+      // 	 _save_timer = nullptr;
+      // }
+      // GD_LINE;
+      // if(_toggle_timer != nullptr)
+      // {
+      // 	 _toggle_timer->free();
+      // 	 _toggle_timer = nullptr;
+      // }
+      // GD_LINE;
       // if(_writer != nullptr)
       // {
       // 	 delete _writer;
       // 	 _writer = nullptr;
       // }
    }
-
-#define STRINGIZE(x) STRINGIZE2(x)
-#define STRINGIZE2(x) #x
-#define LINE_STRING STRINGIZE(__LINE__)
-#define GD_LINE godot::Godot::print(LINE_STRING)
    void Recorder::_init(){}
    void Recorder::_ready()
    {
       // Initialize any variables here
       _viewport = get_viewport();
       _frametick = 1.0 / frames_per_second;
-      _thread = Thread::_new();
+      _thread = Ref<Thread>(Thread::_new());
       _label = Label::_new();
       // # If running on editor, DONT override process and input
       set_process(false);
@@ -124,7 +134,7 @@ namespace godot
       _toggle_timer->set_one_shot(true);
       _viewport->call_deferred("add_child", _save_timer);
       _viewport->call_deferred("add_child", _toggle_timer);
-      
+      Godot::print("recorder ready");  
    }
    void Recorder::_process(float delta)
    {
@@ -144,7 +154,6 @@ namespace godot
    }
    void Recorder::toggle_record()
    {
-      Godot::print("hyng....");
       if (_thread->is_active() || _saving)
       {
    	 return;
@@ -158,18 +167,19 @@ namespace godot
 	 {
 	    if(!_thread->is_active())
 	    {
-	       Godot::print("ruh roh....");
-	       auto err = _thread->start(this, "save_frames");
+	       Godot::print("threaded mp4 save");
+	       auto err = _thread->start(this, "_save_frames");
 	    }
 	 }
 	 else
 	 {	    
-	    _save_frames(nullptr);
+	    _save_frames();
 	 }
       }
    }
-   void Recorder::_save_frames(void* user_data)
+   void Recorder::_save_frames()
    {
+      Godot::print("saving frames to file...");
       _saving = true;
       //# userdata wont be used, is just for the thread calling
       String scene_name = get_tree()->get_current_scene()->get_name();
@@ -182,27 +192,28 @@ namespace godot
 	 String time_str = hour+"-"+minute+"-"+second;
 	 Directory* dir = Directory::_new();
 	 String path = "res://" + output_folder+"/"+scene_name+"_"+time_str+"/";
-	 Godot::print(output_folder);
-	 Godot::print(path);
-	 dir->make_dir(path);
-	 if (dir->open(path) != Error::OK)
-	 {
-	    ERR_PRINT("An error occurred when trying to create the output folder.");
-	 }
+	 // Godot::print(output_folder);
+	 // Godot::print(path);
+	 // dir->make_dir(path);
+	 // if (dir->open(path) != Error::OK)
+	 // {
+	 //    ERR_PRINT("An error occurred when trying to create the output folder.");
+	 // }
 	 auto rect = ReferenceRect::get_rect();
-	 String writer_path = (output_folder+"/"+scene_name+"_"+time_str+".mp4");
+	 String writer_path = (output_folder+"/"+scene_name+"_"+time_str);
 	 {
 	    const char* c_string = writer_path.alloc_c_string();
 	    mpeg_writer*writer = new mpeg_writer(c_string, rect.get_size().x, rect.get_size().y, frames_per_second);
 	    for (int i = 0; i < _images.size(); i++)
 	    {
 	       Ref<Image> image = _images[i];
-	       _label->set_text("Saving frames...("+String::num(i) + "/"+String(_images.size())+")");
+	       _label->set_text("Saving frames...("+String::num(i) + "/"+String::num(_images.size())+")");
 	       image->crop(get_rect().size.x, get_rect().size.y);
 	       if (flip_y)
 	       {
 		  image->flip_y();
 	       }
+	       image->convert(Image::FORMAT_RGB8);
 	       auto pool = image->get_data();
 	       auto* ptr = pool.read().ptr();
 	       writer->add_frame((uint8_t*)ptr);
@@ -210,15 +221,9 @@ namespace godot
 	    Godot::print("wrote "+String::num(_images.size())+"frames");
 	    delete writer;
 	    writer = nullptr;
-	    delete c_string;
 	    Godot::print("so far so good....");
 	 }
 	 _images.clear();
-	
-	 if(_thread->is_active())
-	 {
-	    _thread->wait_to_finish();
-	 }
 	 // Array output;
 	 // String script  = "recorder/folder_to_gif.py";
 	 // path = output_folder+"/"+scene_name+"_"+time_str+"/";
@@ -230,6 +235,7 @@ namespace godot
 	 // OS::get_singleton()->execute("python", array, false, output);
 	 _label->set_text("Done!");
 	 _save_timer->start(1);
+	 Godot::print("wrote: "+writer_path);
       }
    }
    void Recorder::record_duration(float duration = 5)

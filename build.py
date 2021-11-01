@@ -12,7 +12,7 @@ config_hash = '8ff317685643ed2d41cc17cdbb356768'
 config.confply.log_topic = "recorder"
 log.normal("loading build.py with confply_args: "+str(config.confply.args))
 config.confply.tool = options.tool.clangpp
-config.standard = options.standard.cpp11
+config.standard = options.standard.cpp17
 config.source_files = [
     "src/recorder.cpp",
     "src/init.cpp",
@@ -24,9 +24,10 @@ config.include_paths = ["godot-cpp/godot-headers",
                         "godot-cpp/include/gen",
 ]
 ff_dir = "FFmpeg/"
-ff_libs = ["avformat", "avcodec", "swresample", "swscale", "avutil"]
+# ff_libs = ["avformat", "avcodec", "swresample", "swscale", "avutil"]
 # x264 isn't linking correctly in godot yet, there's an issue with the resolved paths being used in the librecorder.so
 # ff_libs = ["avformat", "avcodec", "swresample", "swscale", "avutil", "x264"]
+ff_libs = ["avformat", "avcodec", "swresample", "swscale", "avutil", "avdevice", "avfilter", "x264"]
 ff_lib_dirs = [ff_dir+"lib"+lib for lib in ff_libs]
 config.library_paths.append("recorder/bin/")
 config.library_paths.append("godot-cpp/bin/")
@@ -36,14 +37,16 @@ config.compile_commands = True
 config.position_independent = True
 config.output_file = "recorder/bin/librecorder.so"
 config.output_type = options.output_type.dll
-config.run_paths = ["'$ORIGIN/recorder/bin'"]
+# config.run_paths = ["'$ORIGIN'"]# , "'$ORIGIN/recorder/bin/'"
+config.run_paths = ["'$ORIGIN'"]
+
 
 def post_load():
     import os
     if not os.path.exists("godot-cpp/bin/libgodot-cpp.linux.debug.64.a"):
         os.system("cd godot-cpp; scons platform=linux generate_bindings=yes -j4")
     if not os.path.exists(ff_dir+"config.h"):
-        os.system("cd "+ff_dir+"; ./configure --enable-shared")
+        os.system("cd "+ff_dir+"; ./configure --enable-shared --enable-libx264 --enable-gpl")
     os.system("cd "+ff_dir+"; make")
     log.normal("ffmpeg built")
     pass
