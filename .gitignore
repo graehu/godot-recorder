@@ -1,7 +1,15 @@
 objects/*
+demo/,import/*
+*/objects/*
 .cache/*
 __pycache__/*
+*/__pycache__/*
 compile_commands.json
+f2mp4/recorder/*
+f2mp4/images/*
+*.h264
+*.exe
 *.*~
 *.o
 *.so
+*.so.*

@@ -1,0 +1,11 @@
+[gd_resource type="NativeScript" load_steps=2 format=2]
+
+[ext_resource path="res://recorder/bin/recorder.gdnlib" type="GDNativeLibrary" id=1]
+
+[resource]
+
+resource_name = "recorder.gdnlib"
+class_name = "Recorder"
+script_class_name = "Recorder"
+script_class_icon_path = "res://icon.png"
+library = ExtResource( 1 )

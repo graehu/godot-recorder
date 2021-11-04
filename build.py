@@ -24,10 +24,9 @@ config.include_paths = ["godot-cpp/godot-headers",
                         "godot-cpp/include/gen",
 ]
 ff_dir = "FFmpeg/"
+# #todo: add an option to link to build without x264
 # ff_libs = ["avformat", "avcodec", "swresample", "swscale", "avutil"]
-# x264 isn't linking correctly in godot yet, there's an issue with the resolved paths being used in the librecorder.so
-# ff_libs = ["avformat", "avcodec", "swresample", "swscale", "avutil", "x264"]
-ff_libs = ["avformat", "avcodec", "swresample", "swscale", "avutil", "avdevice", "avfilter", "x264"]
+ff_libs = ["avformat", "avcodec", "swresample", "swscale", "avutil", "x264"]
 ff_lib_dirs = [ff_dir+"lib"+lib for lib in ff_libs]
 config.library_paths.append("recorder/bin/")
 config.library_paths.append("godot-cpp/bin/")
@@ -37,7 +36,6 @@ config.compile_commands = True
 config.position_independent = True
 config.output_file = "recorder/bin/librecorder.so"
 config.output_type = options.output_type.dll
-# config.run_paths = ["'$ORIGIN'"]# , "'$ORIGIN/recorder/bin/'"
 config.run_paths = ["'$ORIGIN'"]
 
 
@@ -54,8 +52,9 @@ def post_load():
 
 def post_run():
     import shutil
+    import subprocess
     import os
-    to_path = "../recorder-demo/recorder"
+    to_path = "demo/recorder"
     # #todo: maybe don't always do this.
     if os.path.exists(to_path):
         shutil.rmtree(to_path)
@@ -65,14 +64,11 @@ def post_run():
                 if ".so." in obj:
                     cp_file = os.path.join(lib_dir, obj)
                     shutil.copy(cp_file, "recorder/bin/")
-                    # #todo: I don't like this! patchelf doesn't come on every system
-                    os.system("patchelf --set-rpath "+(":".join(config.run_paths))+" recorder/bin/"+obj)
-                    print(f"copied {obj} to recorder/bin/{obj}")
-    os.system("patchelf --set-rpath "+(":".join(config.run_paths))+" recorder/bin/libx264.so.160")
+    subprocess.check_output("cp $(find /lib/ -name libx264.so.160) recorder/bin", shell=True)
     shutil.copytree("recorder", to_path)
     # test it!
     if "--test" in config.confply.args:
-        os.system("export DISPLAY=:1; ~/godot --path ~/Projects/godot/recorder-demo")
+        os.system("export DISPLAY=:1; ~/godot --path demo")
 
 
 config.confply.post_load = post_load
