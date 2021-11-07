@@ -9,3 +9,6 @@
 	path = godot-cpp
 	url = git@github.com:godotengine/godot-cpp.git
 	shallow = true
+[submodule "openh264"]
+	path = openh264
+	url = git@github.com:cisco/openh264.git
