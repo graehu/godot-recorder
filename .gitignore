@@ -1,5 +1,5 @@
 objects/*
-demo/,import/*
+demo/.import/*
 */objects/*
 .cache/*
 __pycache__/*
