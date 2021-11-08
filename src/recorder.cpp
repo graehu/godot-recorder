@@ -134,7 +134,6 @@ namespace godot
       _toggle_timer->set_one_shot(true);
       _viewport->call_deferred("add_child", _save_timer);
       _viewport->call_deferred("add_child", _toggle_timer);
-      Godot::print("recorder ready");  
    }
    void Recorder::_process(float delta)
    {
@@ -167,7 +166,6 @@ namespace godot
 	 {
 	    if(!_thread->is_active())
 	    {
-	       Godot::print("threaded mp4 save");
 	       auto err = _thread->start(this, "_save_frames");
 	    }
 	 }
@@ -179,7 +177,6 @@ namespace godot
    }
    void Recorder::_save_frames()
    {
-      Godot::print("saving frames to file...");
       _saving = true;
       //# userdata wont be used, is just for the thread calling
       String scene_name = get_tree()->get_current_scene()->get_name();
@@ -191,14 +188,12 @@ namespace godot
       {
 	 String time_str = hour+"-"+minute+"-"+second;
 	 Directory* dir = Directory::_new();
-	 String path = "res://" + output_folder+"/"+scene_name+"_"+time_str+"/";
-	 // Godot::print(output_folder);
-	 // Godot::print(path);
-	 // dir->make_dir(path);
-	 // if (dir->open(path) != Error::OK)
-	 // {
-	 //    ERR_PRINT("An error occurred when trying to create the output folder.");
-	 // }
+	 String dir_path = "res://" + output_folder;
+	 dir->make_dir(dir_path);
+	 if (dir->open(dir_path) != Error::OK)
+	 {
+	    ERR_PRINT("An error occurred when trying to create the output folder.");
+	 }
 	 auto rect = ReferenceRect::get_rect();
 	 String writer_path = (output_folder+"/"+scene_name+"_"+time_str);
 	 {
@@ -218,24 +213,14 @@ namespace godot
 	       auto* ptr = pool.read().ptr();
 	       writer->add_frame((uint8_t*)ptr);
 	    }
-	    Godot::print("wrote "+String::num(_images.size())+"frames");
+	    // Godot::print("wrote "+String::num(_images.size())+"frames");
 	    delete writer;
 	    writer = nullptr;
-	    Godot::print("so far so good....");
 	 }
 	 _images.clear();
-	 // Array output;
-	 // String script  = "recorder/folder_to_gif.py";
-	 // path = output_folder+"/"+scene_name+"_"+time_str+"/";
-	 // float fps = frames_per_second;
-	 // PoolStringArray array;
-	 // array.append(script);
-	 // array.append(path);
-	 // array.append(fps);
-	 // OS::get_singleton()->execute("python", array, false, output);
 	 _label->set_text("Done!");
 	 _save_timer->start(1);
-	 Godot::print("wrote: "+writer_path);
+	 // Godot::print("wrote: "+writer_path);
       }
    }
    void Recorder::record_duration(float duration = 5)

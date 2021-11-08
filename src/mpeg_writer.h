@@ -31,6 +31,7 @@ private:
    unsigned int fps; // frames per second
    //
    float scale;
+   bool initialised;
 };
 
 #endif//MPEG_WRITER_H

@@ -53,7 +53,8 @@ def post_load():
         log.normal("godot-cpp bindings generated")
 
     if "--x264" not in config.confply.args:
-        if not os.path.exists("openh264/lib/libopenh264.so.2.1.1"):
+        if not os.path.exists("openh264/lib/libopenh264.so.2.1.1") or \
+           not os.path.exists("openh264/include/codec_api.h"):
             os.system("cd openh264; make install-shared OS=linux ARCH=x86_64 PREFIX=$(pwd)")
             log.normal("openh264 built")
 

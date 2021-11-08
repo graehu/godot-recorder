@@ -1,13 +1,6 @@
 #include "mpeg_writer.h"
-#include "GodotGlobal.hpp"
 #include <cstring>
 #include <string>
-#include <Godot.hpp>
-
-#define STRINGIZE(x) STRINGIZE2(x)
-#define STRINGIZE2(x) #x
-#define LINE_STRING STRINGIZE(__LINE__)
-#define GD_LINE godot::Godot::print(__FILE__ ":" LINE_STRING)
 
 // needed because ffmpeg is a pure C library.
 extern "C"
@@ -19,6 +12,8 @@ extern "C"
 #include <libswscale/swscale.h>
 #include <libavutil/error.h>
 }
+
+#define DBG_INFO 0
 
 mpeg_writer::mpeg_writer(const char* _filename, unsigned int _width, unsigned int _height, unsigned int _fps, float _scale) :
    frame(nullptr),
@@ -32,11 +27,14 @@ mpeg_writer::mpeg_writer(const char* _filename, unsigned int _width, unsigned in
    fps(_fps),
    scale(_scale)
 {
-   // fprintf(stderr, "\n");
-   fprintf(stderr, "w %d\n", width);
-   fprintf(stderr, "h %d\n", height);
-   fprintf(stderr, "f %d\n", fps);
-   fprintf(stderr, "s %f\n", scale);
+   initialised = false;
+#if DBG_INFO
+   printf("filename %s", filename);
+   printf("w %d\n", width);
+   printf("h %d\n", height);
+   printf("fps %d\n", fps);
+   printf("scale %f\n", scale);
+#endif
    packet = new AVPacket();
    //allocate h264 codec
    auto codec_id = AV_CODEC_ID_H264;
@@ -45,14 +43,13 @@ mpeg_writer::mpeg_writer(const char* _filename, unsigned int _width, unsigned in
    if (codec == nullptr)
    {
       fprintf(stderr, "Codec not found\n");
-      
-      exit(1);
+      return;
    }
    codec_context = avcodec_alloc_context3(codec);
    if (codec_context == nullptr)
    {
       fprintf(stderr, "Could not allocate video codec context\n");
-      exit(1);
+      return;
    }
    //setup codec
    codec_context->bit_rate = 400000;
@@ -73,7 +70,7 @@ mpeg_writer::mpeg_writer(const char* _filename, unsigned int _width, unsigned in
       char error_buf [AV_ERROR_MAX_STRING_SIZE] = {0};
       av_strerror(ret, error_buf, AV_ERROR_MAX_STRING_SIZE);
       fprintf(stderr, "Could not open codec %s\n", error_buf);
-      exit(1);
+      return;
    }
    char float_str[16];
    snprintf(float_str, 16,".%.2f.h264", scale);
@@ -82,14 +79,14 @@ mpeg_writer::mpeg_writer(const char* _filename, unsigned int _width, unsigned in
    if (out_file == nullptr)
    {
       fprintf(stderr, "Could not open %s\n", file_str.c_str());
-      exit(1);
+      return;
    }
    //allocate frames
    frame = av_frame_alloc();
    if (frame == nullptr)
    {
       fprintf(stderr, "Could not allocate video frame\n");
-      exit(1);
+      return;
    }
    frame->format = codec_context->pix_fmt;
    frame->width  = width;
@@ -104,13 +101,13 @@ mpeg_writer::mpeg_writer(const char* _filename, unsigned int _width, unsigned in
       char error_buf [AV_ERROR_MAX_STRING_SIZE] = {0};
       av_strerror(ret, error_buf, AV_ERROR_MAX_STRING_SIZE);
       fprintf(stderr, "Could not allocate raw picture buffer: %s\n", error_buf);
-      exit(1);
+      return;
    }
    scaled_frame = av_frame_alloc();
    if (scaled_frame == nullptr)
    {
       fprintf(stderr, "Could not allocate video frame\n");
-      exit(1);
+      return;
    }
    scaled_frame->format = codec_context->pix_fmt;
    scaled_frame->width  = width*scale;
@@ -124,9 +121,10 @@ mpeg_writer::mpeg_writer(const char* _filename, unsigned int _width, unsigned in
       char error_buf [AV_ERROR_MAX_STRING_SIZE] = {0};
       av_strerror(ret, error_buf, AV_ERROR_MAX_STRING_SIZE);
       fprintf(stderr, "Could not allocate raw picture buffer: %s\n", error_buf);
-      exit(1);
+      return;
    }
    //next bit
+   initialised = true;
 }
 mpeg_writer::~mpeg_writer()
 {
@@ -150,7 +148,7 @@ mpeg_writer::~mpeg_writer()
 	 char error_buf [AV_ERROR_MAX_STRING_SIZE] = {0};
 	 av_strerror(ret, error_buf, AV_ERROR_MAX_STRING_SIZE);
 	 fprintf(stderr, "Error encoding frame %s\n", error_buf);
-	 exit(1);
+	 return;
       }
    } while (ret == EAGAIN);
    fwrite(endcode, 1, sizeof(endcode), out_file);
@@ -165,6 +163,7 @@ mpeg_writer::~mpeg_writer()
  }
 int mpeg_writer::add_frame(uint8_t *rgb, int pix_format)
 {
+   if(!initialised) { return -1; }
    if(rgb != nullptr)
    {
       const int in_linesize[1] = { 3 * frame->width };
@@ -207,8 +206,7 @@ int mpeg_writer::add_frame(uint8_t *rgb, int pix_format)
 	 char error_buf [AV_ERROR_MAX_STRING_SIZE] = {0};
 	 av_strerror(ret, error_buf, AV_ERROR_MAX_STRING_SIZE);
 	 fprintf(stderr, "Error encoding frame %s\n", error_buf);
-	 godot::Godot::print("Error encoding frame %s\n", error_buf);
-	 exit(1);
+	 return -1;
       }
       ret = avcodec_receive_packet(codec_context, packet);
       if (ret >= 0)
@@ -216,6 +214,7 @@ int mpeg_writer::add_frame(uint8_t *rgb, int pix_format)
 	 fwrite(packet->data, 1, packet->size, out_file);
 	 av_packet_unref(packet);
       }
+      return 0;
    }
    return -1;
 }
