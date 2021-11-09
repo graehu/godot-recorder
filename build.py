@@ -6,34 +6,46 @@ sys.path.append('confply')
 import confply.cpp_compiler.config as config
 import confply.cpp_compiler.options as options
 import confply.log as log
-config_hash = '8ff317685643ed2d41cc17cdbb356768'
+config_hash = '25c942bec869eafa3b65c8d9a9b5ec0b'
 ############# modify_below ################
-
 config.confply.log_topic = "recorder"
 log.normal("loading build.py with confply_args: "+str(config.confply.args))
-config.confply.tool = options.tool.clangpp
-config.standard = options.standard.cpp17
+# handle commandline args
+x264 = "--x264" in config.confply.args
+testing = "--test" in config.confply.args
+#
 config.source_files = [
     "src/recorder.cpp",
     "src/init.cpp",
     "src/mpeg_writer.cpp"
 ]
-config.include_paths = ["godot-cpp/godot-headers",
-                        "godot-cpp/include",
-                        "godot-cpp/include/core",
-                        "godot-cpp/include/gen",
+config.include_paths = [
+    "godot-cpp/godot-headers",
+    "godot-cpp/include",
+    "godot-cpp/include/core",
+    "godot-cpp/include/gen"
+]
+ff_libs = [
+    "avformat",
+    "avcodec",
+    "swresample",
+    "swscale",
+    "avutil",
+    "x264" if x264 else "openh264"
 ]
 ff_dir = "FFmpeg/"
-if "--x264" in config.confply.args:
-    ff_libs = ["avformat", "avcodec", "swresample", "swscale", "avutil", "x264"]
-else:
-    ff_libs = ["avformat", "avcodec", "swresample", "swscale", "avutil", "openh264"]
 ff_lib_dirs = [ff_dir+"lib"+lib for lib in ff_libs]
-config.library_paths.append("recorder/bin/")
-config.library_paths.append("godot-cpp/bin/")
-config.library_paths.append("openh264/")
-config.link_libraries.extend(ff_libs)
-config.link_libraries.append("godot-cpp.linux.debug.64")
+config.library_paths = [
+    "recorder/bin/",
+    "godot-cpp/bin/",
+    "openh264/" if not x264 else None
+]
+config.link_libraries = [
+    *ff_libs,
+    "godot-cpp.linux.debug.64"
+]
+config.confply.tool = options.tool.clangpp
+config.standard = options.standard.cpp17
 config.compile_commands = True
 config.position_independent = True
 config.output_file = "recorder/bin/librecorder.so"
@@ -44,15 +56,11 @@ config.run_paths = ["'$ORIGIN'"]
 def post_load():
     import os
     import shutil
-    import pathlib
-    libs = pathlib.Path("recorder/bin/").glob("*.so*")
-    for lib in libs:
-        os.remove(lib)
     if not os.path.exists("godot-cpp/bin/libgodot-cpp.linux.debug.64.a"):
         os.system("cd godot-cpp; scons platform=linux generate_bindings=yes -j4")
         log.normal("godot-cpp bindings generated")
 
-    if "--x264" not in config.confply.args:
+    if x264:
         if not os.path.exists("openh264/lib/libopenh264.so.2.1.1") or \
            not os.path.exists("openh264/include/codec_api.h"):
             os.system("cd openh264; make install-shared OS=linux ARCH=x86_64 PREFIX=$(pwd)")
@@ -60,15 +68,18 @@ def post_load():
 
     if not os.path.exists(ff_dir+"config.h"):
         configure = ["--enable-shared", "--disable-programs"]
-        if "--x264" in config.confply.args:
-            os.system("cd "+ff_dir+"; ./configure --enable-shared --enable-libx264 --enable-gpl")
-        else:
-            configure.extend(
-                [
-                    "--enable-libopenh264",
-                ]
-            )
-            os.system("export PKG_CONFIG_PATH=$(pwd)/openh264/lib/pkgconfig; cd "+ff_dir+";./configure "+" ".join(configure))
+        pkgconfig = "" if x264 else "export PKG_CONFIG_PATH=$(pwd)/openh264/lib/pkgconfig;"
+        configure.extend(
+            [
+                "--enable-libx264",
+                "--enable-gpl"
+            ]
+            if x264 else
+            [
+                "--enable-libopenh264"
+            ]
+        )
+        os.system(pkgconfig+"cd "+ff_dir+";./configure "+" ".join(configure))
     os.system("cd "+ff_dir+";  make")
     log.normal("ffmpeg built")
     for lib_dir in ff_lib_dirs:
@@ -77,7 +88,7 @@ def post_load():
                 if ".so." in obj:
                     cp_file = os.path.join(lib_dir, obj)
                     shutil.copy(cp_file, "recorder/bin/")
-    if "--x264" in config.confply.args:
+    if x264:
         os.system("cp $(find /lib/ -name libx264.so.160) recorder/bin")
     else:
         shutil.copy("openh264/lib/libopenh264.so", "recorder/bin")
@@ -95,7 +106,7 @@ def post_run():
         shutil.rmtree(to_path)
     shutil.copytree("recorder", to_path)
     # test it!
-    if "--test" in config.confply.args:
+    if testing:
         os.system("export DISPLAY=:1; ~/godot --path demo")
 
 
